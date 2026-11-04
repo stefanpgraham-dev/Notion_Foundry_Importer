@@ -33,6 +33,6 @@ This is a one-way importer. Foundry edits are not sent back to Notion.
 
 Paragraphs, headings, bulleted and numbered lists, quotes, callouts, code, dividers, bookmarks, links, and images are rendered where possible. Nested child pages are imported as entries in nested Foundry folders when importing a branch. Other blocks receive a readable fallback containing their block type and any available text.
 
-## Publishing
+## Repository and installation
 
-This directory is intended to be published as a standalone Foundry module repository. Set the module manifest URL to the raw `module.json` URL after the source is pushed to GitHub.
+The source is maintained in the private `Notion_Foundry_Importer` GitHub repository. This source repository does not yet include a Foundry release ZIP or an installable manifest URL. Foundry's package installer needs a manifest with a downloadable ZIP; prepare that as a separate release before distributing installation instructions.
