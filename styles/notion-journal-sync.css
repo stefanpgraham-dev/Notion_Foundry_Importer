@@ -1,0 +1,50 @@
+.notion-sync-browser {
+  min-height: 20rem;
+}
+
+.notion-sync-browser .window-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.notion-sync-browser .notion-sync-toolbar {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.notion-sync-browser .notion-sync-toolbar input {
+  flex: 1;
+}
+
+.notion-sync-browser .notion-sync-results {
+  overflow: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.notion-sync-browser .notion-sync-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border-light-tertiary);
+  border-radius: 4px;
+  padding: 0.45rem;
+}
+
+.notion-sync-browser .notion-sync-result-name {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.notion-sync-browser .notion-sync-status {
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+
+.notion-sync-config {
+  display: grid;
+  gap: 0.5rem;
+}
