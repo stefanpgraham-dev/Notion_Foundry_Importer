@@ -1,0 +1,14 @@
+<section class="notion-sync-browser">
+  <div class="notion-sync-toolbar">
+    <input type="search" data-search placeholder="Search accessible Notion pages…" aria-label="Search Notion pages">
+    <button type="button" data-action="search"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+    <button type="button" data-action="search-databases"><i class="fa-solid fa-table"></i> Databases</button>
+    <button type="button" data-action="configure"><i class="fa-solid fa-key"></i> Connect</button>
+  </div>
+  <div class="notion-sync-toolbar">
+    <input type="text" data-page-id placeholder="Paste a Notion page or database URL / ID" aria-label="Notion page or database URL / ID">
+    <button type="button" data-action="import-id"><i class="fa-solid fa-folder-open"></i> Open source</button>
+  </div>
+  <p class="notion-sync-status" data-status>{{status}}</p>
+  <div class="notion-sync-results" data-results></div>
+</section>
