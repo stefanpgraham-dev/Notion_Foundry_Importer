@@ -2,7 +2,7 @@
   "id": "notion-foundry-sync",
   "title": "Notion Journal Sync",
   "description": "Import and refresh Notion pages as Foundry journal entries.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "compatibility": {
     "minimum": "14",
     "verified": "14.364"
