@@ -309,7 +309,7 @@ class NotionSyncBrowser extends Application {
         pages: [{
           name: "Content",
           type: "text",
-          text: { content: html, format: "html" }
+          text: { content: html, format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML }
         }],
         flags: { [MODULE_ID]: { notionPageId: page.id, notionUrl: page.url, syncedAt: new Date().toISOString() } }
       };
@@ -324,12 +324,15 @@ class NotionSyncBrowser extends Application {
         }
         const contentPage = imported.pages.find(journalPage => journalPage.name === "Content");
         if (contentPage) {
-          await contentPage.update({ "text.content": html });
+          await contentPage.update({
+            "text.content": html,
+            "text.format": CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
+          });
         } else {
           await imported.createEmbeddedDocuments("JournalEntryPage", [{
             name: "Content",
             type: "text",
-            text: { content: html, format: "html" }
+            text: { content: html, format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML }
           }]);
         }
         await imported.update({
@@ -555,11 +558,31 @@ async function renderImageBlock(block, pageId) {
     const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg")?.split(";")[0] || source.match(/\.(png|jpe?g|gif|webp|svg)(?:\?|$)/i)?.[1] || "png";
     const file = new File([blob], `${block.id}.${extension}`, { type: blob.type || `image/${extension}` });
     const target = `notion-journal-sync/${pageId.replace(/-/g, "")}`;
-    const uploaded = await FilePicker.upload("data", target, file, {}, { notify: false });
+    await ensureDataDirectory(target);
+    const uploaded = await foundry.applications.apps.FilePicker.upload("data", target, file, {}, { notify: false });
     const path = uploaded.path ?? uploaded.url ?? uploaded;
     return `<p><img src="${escapeAttribute(path)}" alt="${escapeAttribute(alt)}" style="max-width:100%"></p>`;
   } catch (_error) {
     return `<p><a href="${escapeAttribute(source)}">${escapeHtml(alt)} (open from Notion)</a></p>`;
+  }
+}
+
+async function ensureDataDirectory(path) {
+  const filePicker = foundry.applications.apps.FilePicker;
+  const segments = path.split("/").filter(Boolean);
+  let current = "";
+  for (const segment of segments) {
+    current = current ? `${current}/${segment}` : segment;
+    try {
+      await filePicker.browse("data", current);
+    } catch (_error) {
+      try {
+        await filePicker.createDirectory("data", current);
+      } catch (_createError) {
+        // Another import may have created it between browse and create.
+        await filePicker.browse("data", current);
+      }
+    }
   }
 }
 
