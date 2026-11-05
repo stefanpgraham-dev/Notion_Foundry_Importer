@@ -10,11 +10,20 @@
 
 .notion-sync-browser .notion-sync-toolbar {
   display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.4rem;
 }
 
 .notion-sync-browser .notion-sync-toolbar input {
-  flex: 1;
+  flex: 1 1 14rem;
+  min-width: min(14rem, 100%);
+  width: auto;
+}
+
+.notion-sync-browser .notion-sync-toolbar > button {
+  flex: 1 1 auto;
+  white-space: nowrap;
 }
 
 .notion-sync-browser .notion-sync-results {
@@ -56,4 +65,12 @@
 .notion-sync-config {
   display: grid;
   gap: 0.5rem;
+}
+
+.notion-sync-browser .notion-sync-visibility-button {
+  cursor: pointer;
+}
+
+.notion-sync-browser .notion-sync-visibility-button:hover {
+  filter: brightness(1.15);
 }
