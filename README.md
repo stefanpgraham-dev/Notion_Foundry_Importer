@@ -8,6 +8,7 @@ A Foundry VTT v14 module for pulling Notion pages into Journal Entries and refre
 - Configure and validate a Notion internal integration token.
 - Search pages and data sources available to the integration.
 - Import one page, a page branch, or all entries from a database into Foundry Journal folders.
+- Sort database entries alphabetically and filter them by title or property values.
 - Refresh imported entries from Notion while retaining Foundry folder placement and permissions.
 - Track the source page ID and sync timestamp on each imported entry.
 - Show or hide an imported entry for players directly from the browser.
@@ -35,4 +36,8 @@ Paragraphs, headings, bulleted and numbered lists, quotes, callouts, code, divid
 
 ## Repository and installation
 
-The source is maintained in the private `Notion_Foundry_Importer` GitHub repository. This source repository does not yet include a Foundry release ZIP or an installable manifest URL. Foundry's package installer needs a manifest with a downloadable ZIP; prepare that as a separate release before distributing installation instructions.
+The source is maintained in the public [Notion_Foundry_Importer GitHub repository](https://github.com/stefanpgraham-dev/Notion_Foundry_Importer).
+
+Install through Foundry Setup → Add-on Modules → Install Module using this manifest URL:
+
+`https://raw.githubusercontent.com/stefanpgraham-dev/Notion_Foundry_Importer/main/module.json`
