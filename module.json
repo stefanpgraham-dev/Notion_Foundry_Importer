@@ -15,5 +15,8 @@
   ],
   "flags": {
     "hotReload": true
-  }
+  },
+  "manifest": "https://raw.githubusercontent.com/stefanpgraham-dev/Notion_Foundry_Importer/main/module.json",
+  "download": "https://github.com/stefanpgraham-dev/Notion_Foundry_Importer/archive/refs/heads/main.zip",
+  "url": "https://github.com/stefanpgraham-dev/Notion_Foundry_Importer"
 }
