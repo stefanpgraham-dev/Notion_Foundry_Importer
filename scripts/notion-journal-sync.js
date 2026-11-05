@@ -210,20 +210,30 @@ class NotionSyncBrowser extends Application {
     row.append(action);
     const visibility = document.createElement("button");
     visibility.type = "button";
-    visibility.disabled = !currentEntry;
+    visibility.className = "notion-sync-visibility-button";
     row.append(visibility);
     const updateVisibilityButton = () => {
       const visible = (currentEntry?.ownership?.default ?? CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
       visibility.title = visible ? "Hide this entry from players" : "Show this entry to players";
+      visibility.setAttribute("aria-label", visibility.title);
       visibility.innerHTML = visible ? '<i class="fa-solid fa-eye-slash"></i> Hide' : '<i class="fa-solid fa-eye"></i> Show';
     };
     updateVisibilityButton();
     visibility.addEventListener("click", async () => {
-      if (!currentEntry) return;
+      currentEntry = currentEntry ?? findImportedEntry(page.id);
+      if (!currentEntry) {
+        ui.notifications.warn("Pull this Notion page into Foundry before changing player visibility.");
+        return;
+      }
       const show = (currentEntry.ownership?.default ?? CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE) < CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
-      await currentEntry.update({ ownership: { default: show ? CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
-      currentEntry = game.journal.get(currentEntry.id);
-      updateVisibilityButton();
+      try {
+        await currentEntry.update({ ownership: { default: show ? CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
+        currentEntry = game.journal.get(currentEntry.id);
+        updateVisibilityButton();
+        ui.notifications.info(show ? "Journal entry is now visible to players." : "Journal entry is now hidden from players.");
+      } catch (error) {
+        ui.notifications.error(`Could not change journal visibility: ${error.message}`);
+      }
     });
     if (!imported) {
       const branch = document.createElement("button");
