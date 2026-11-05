@@ -285,8 +285,17 @@ class NotionSyncBrowser extends Application {
     status.textContent = `Loading ${databaseTitle(database)}…`;
     results.replaceChildren();
     try {
-      const pages = await queryDataSource(source.id);
+      const pages = (await queryDataSource(source.id)).sort((a, b) =>
+        notionPageTitle(a).localeCompare(notionPageTitle(b), undefined, { numeric: true, sensitivity: "base" })
+      );
       const folder = await getOrCreateFolder(databaseTitle(database));
+      const databaseSearch = document.createElement("input");
+      databaseSearch.type = "search";
+      databaseSearch.className = "notion-sync-database-search";
+      databaseSearch.placeholder = `Search entries in ${databaseTitle(database)}…`;
+      databaseSearch.setAttribute("aria-label", `Search entries in ${databaseTitle(database)}`);
+      results.append(databaseSearch);
+
       const pullAll = document.createElement("button");
       pullAll.type = "button";
       pullAll.innerHTML = `<i class="fa-solid fa-download"></i> Pull all ${pages.length} entries into “${escapeHtml(folder.name)}”`;
@@ -302,8 +311,25 @@ class NotionSyncBrowser extends Application {
         await this.showDataSource(database, source);
       });
       results.append(pullAll);
-      status.textContent = `${pages.length} database entr${pages.length === 1 ? "y" : "ies"} found. Pull individual entries or import the full database.`;
-      for (const page of pages) results.append(this.resultElement(page, { folder }));
+      const rows = pages.map(page => {
+        const row = this.resultElement(page, { folder });
+        row.dataset.searchText = pageSearchText(page);
+        results.append(row);
+        return row;
+      });
+      const updateFilter = () => {
+        const query = normalizeSearchText(databaseSearch.value.trim());
+        let visibleCount = 0;
+        for (const row of rows) {
+          row.hidden = Boolean(query) && !row.dataset.searchText.includes(query);
+          if (!row.hidden) visibleCount++;
+        }
+        status.textContent = query
+          ? `${visibleCount} of ${pages.length} database entries match “${databaseSearch.value.trim()}”.`
+          : `${pages.length} database entr${pages.length === 1 ? "y" : "ies"} found, sorted alphabetically. Pull individual entries or import the full database.`;
+      };
+      databaseSearch.addEventListener("input", updateFilter);
+      updateFilter();
     } catch (error) {
       status.textContent = `Could not load database entries: ${error.message}`;
     }
@@ -627,6 +653,30 @@ function notionPageTitle(page) {
 
 function databaseTitle(database) {
   return richTextTitle(database.title) || database.name || "Notion database";
+}
+
+function pageSearchText(page) {
+  const values = [notionPageTitle(page)];
+  for (const [name, property] of Object.entries(page.properties ?? {})) {
+    values.push(name, searchableValue(property[property.type]));
+  }
+  return normalizeSearchText(values.join(" "));
+}
+
+function searchableValue(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map(searchableValue).join(" ");
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .filter(([key]) => !["id", "type", "icon", "created_by", "last_edited_by"].includes(key))
+      .map(([, nested]) => searchableValue(nested))
+      .join(" ");
+  }
+  return String(value);
+}
+
+function normalizeSearchText(value) {
+  return String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
 }
 
 function richTextTitle(value) {
