@@ -34,6 +34,12 @@
   gap: 0.3rem;
 }
 
+.notion-sync-browser .notion-sync-database-search {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+
 .notion-sync-browser .notion-sync-result {
   display: flex;
   align-items: center;
