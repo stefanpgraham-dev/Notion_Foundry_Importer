@@ -35,9 +35,46 @@
 }
 
 .notion-sync-browser .notion-sync-database-search {
-  flex: 0 0 auto;
-  width: 100%;
+  flex: 1 1 14rem;
+  width: auto;
   min-width: 0;
+}
+
+.notion-sync-browser .notion-sync-database-controls,
+.notion-sync-browser .notion-sync-database-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.notion-sync-browser .notion-sync-sort-label,
+.notion-sync-browser .notion-sync-select-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.notion-sync-browser .notion-sync-sort-select {
+  max-width: 18rem;
+}
+
+.notion-sync-browser .notion-sync-entry-select,
+.notion-sync-browser .notion-sync-select-visible input {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
+
+.notion-sync-browser .notion-sync-sync-summary {
+  padding: 0.4rem;
+  border: 1px solid var(--color-border-light-tertiary);
+  border-radius: 4px;
+}
+
+.notion-sync-browser .notion-sync-failed-list {
+  margin: 0;
+  padding-inline-start: 1.5rem;
 }
 
 .notion-sync-browser .notion-sync-result {
@@ -71,6 +108,31 @@
 .notion-sync-config {
   display: grid;
   gap: 0.5rem;
+}
+
+.notion-sync-refresh-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.notion-sync-refresh-preview section {
+  min-width: 0;
+}
+
+.notion-sync-refresh-preview pre {
+  max-height: 18rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border-light-tertiary);
+}
+
+@media (max-width: 38rem) {
+  .notion-sync-refresh-preview {
+    grid-template-columns: 1fr;
+  }
 }
 
 .notion-sync-browser .notion-sync-visibility-button {
