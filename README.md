@@ -7,6 +7,10 @@ A Foundry VTT v14 module for pulling Notion pages into Journal Entries and refre
 - GM-only Notion browser button in the Journal directory.
 - Configure and validate a Notion internal integration token.
 - Search pages and data sources available to the integration.
+- Search database entries by title and property values; sort by title, timestamps, or a database property.
+- Select visible entries and bulk pull or change player visibility.
+- Review a text preview before a manual refresh, and see the last sync time on imported entries.
+- Batch sync reports added, refreshed, unchanged, and failed entries, with a retry action for failures.
 - Import one page, a page branch, or all entries from a database into Foundry Journal folders.
 - Sort database entries alphabetically and filter them by title or property values.
 - Refresh imported entries from Notion while retaining Foundry folder placement and permissions.
@@ -26,7 +30,7 @@ The integration token is stored as a client-scoped Foundry setting and is only u
 
 ## Sync policy
 
-Notion is the source of truth for imported titles and page content. Refresh updates those fields and the imported source page, while leaving Foundry folder placement and permission configuration alone. The module does not delete journal entries if a Notion page is removed or access is revoked.
+Notion is the source of truth for imported titles and page content. A manual refresh shows a before/after text preview; confirming replaces the imported content and updates its sync time, while leaving Foundry folder placement and permission configuration alone. Batch syncs skip pages whose Notion last-edited time has not changed. The module does not delete journal entries if a Notion page is removed or access is revoked.
 
 This is a one-way importer. Foundry edits are not sent back to Notion.
 
