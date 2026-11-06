@@ -185,7 +185,8 @@ class NotionSyncBrowser extends Application {
     row.append(label);
     const status = document.createElement("span");
     status.className = "notion-sync-status";
-    status.textContent = imported ? "Imported" : "Not imported";
+    const syncedAt = imported?.getFlag(MODULE_ID, "syncedAt");
+    status.textContent = imported ? `Synced ${formatSyncTime(syncedAt)}` : "Not imported";
     row.append(status);
     const action = document.createElement("button");
     let currentEntry = imported;
@@ -200,7 +201,7 @@ class NotionSyncBrowser extends Application {
         ? await this.refresh(currentEntry.id, { skipRender: true })
         : await this.pull(page.id, title, { folder, skipRender: true });
       if (!currentEntry) return;
-      status.textContent = "Imported";
+      status.textContent = `Synced ${formatSyncTime(currentEntry.getFlag(MODULE_ID, "syncedAt"))}`;
       action.dataset.action = "refresh";
       action.dataset.entryId = currentEntry.id;
       action.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh';
@@ -243,7 +244,7 @@ class NotionSyncBrowser extends Application {
       branch.addEventListener("click", async () => {
         currentEntry = await this.pull(page.id, title, { includeChildren: true, folder, skipRender: true });
         if (!currentEntry) return;
-        status.textContent = "Imported with child pages";
+        status.textContent = `Synced ${formatSyncTime(currentEntry.getFlag(MODULE_ID, "syncedAt"))} (with child pages)`;
         action.dataset.action = "refresh";
         action.dataset.entryId = currentEntry.id;
         action.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh';
@@ -277,7 +278,7 @@ class NotionSyncBrowser extends Application {
     }
   }
 
-  async showDataSource(database, source) {
+  async showDataSource(database, source, { syncReport = null } = {}) {
     const root = this.element?.[0] ?? this.element;
     const results = root?.querySelector("[data-results]");
     const status = root?.querySelector("[data-status]");
@@ -285,50 +286,210 @@ class NotionSyncBrowser extends Application {
     status.textContent = `Loading ${databaseTitle(database)}…`;
     results.replaceChildren();
     try {
-      const pages = (await queryDataSource(source.id)).sort((a, b) =>
-        notionPageTitle(a).localeCompare(notionPageTitle(b), undefined, { numeric: true, sensitivity: "base" })
-      );
+      const pages = await queryDataSource(source.id);
       const folder = await getOrCreateFolder(databaseTitle(database));
+      const compareTitle = (a, b) => notionPageTitle(a).localeCompare(notionPageTitle(b), undefined, { numeric: true, sensitivity: "base" });
+      pages.sort(compareTitle);
+
+      if (syncReport) {
+        const summary = document.createElement("div");
+        summary.className = "notion-sync-sync-summary";
+        summary.textContent = `Sync complete: ${syncReport.added} added, ${syncReport.refreshed} refreshed, ${syncReport.skipped} unchanged, ${syncReport.failed.length} failed.`;
+        results.append(summary);
+        if (syncReport.failed.length) {
+          const failedList = document.createElement("ul");
+          failedList.className = "notion-sync-failed-list";
+          for (const page of syncReport.failed) {
+            const item = document.createElement("li");
+            item.textContent = notionPageTitle(page);
+            failedList.append(item);
+          }
+          results.append(failedList);
+        }
+      }
+
+      const controls = document.createElement("div");
+      controls.className = "notion-sync-database-controls";
       const databaseSearch = document.createElement("input");
       databaseSearch.type = "search";
       databaseSearch.className = "notion-sync-database-search";
       databaseSearch.placeholder = `Search entries in ${databaseTitle(database)}…`;
       databaseSearch.setAttribute("aria-label", `Search entries in ${databaseTitle(database)}`);
-      results.append(databaseSearch);
+      controls.append(databaseSearch);
+
+      const sortLabel = document.createElement("label");
+      sortLabel.className = "notion-sync-sort-label";
+      sortLabel.textContent = "Sort:";
+      const sortSelect = document.createElement("select");
+      sortSelect.className = "notion-sync-sort-select";
+      sortSelect.setAttribute("aria-label", "Sort database entries");
+      const sortOptions = [
+        ["title", "Title A–Z"],
+        ["last_edited_time", "Last edited (newest)"],
+        ["created_time", "Created (newest)"]
+      ];
+      for (const [name, property] of Object.entries(pages[0]?.properties ?? {}).filter(([, property]) => property.type !== "title").sort(([a], [b]) => a.localeCompare(b))) {
+        sortOptions.push([`property:${name}`, `Property: ${name}`]);
+      }
+      for (const [value, label] of sortOptions) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        sortSelect.append(option);
+      }
+      sortLabel.append(sortSelect);
+      controls.append(sortLabel);
+      results.append(controls);
+
+      const actions = document.createElement("div");
+      actions.className = "notion-sync-database-actions";
+      const selectVisibleLabel = document.createElement("label");
+      selectVisibleLabel.className = "notion-sync-select-visible";
+      const selectVisible = document.createElement("input");
+      selectVisible.type = "checkbox";
+      selectVisibleLabel.append(selectVisible, document.createTextNode(" Select visible"));
+      actions.append(selectVisibleLabel);
+
+      const pullSelected = document.createElement("button");
+      pullSelected.type = "button";
+      pullSelected.disabled = true;
+      pullSelected.innerHTML = '<i class="fa-solid fa-download"></i> Pull selected (0)';
+      actions.append(pullSelected);
 
       const pullAll = document.createElement("button");
       pullAll.type = "button";
-      pullAll.innerHTML = `<i class="fa-solid fa-download"></i> Pull all ${pages.length} entries into “${escapeHtml(folder.name)}”`;
-      pullAll.addEventListener("click", async () => {
-        const importedCount = pages.filter(page => findImportedEntry(page.id)).length;
-        const confirmed = await Dialog.confirm({
-          title: importedCount ? "Import and refresh database" : "Import database",
-          content: `<p>Import ${pages.length - importedCount} new entr${pages.length - importedCount === 1 ? "y" : "ies"}${importedCount ? ` and refresh ${importedCount} existing entr${importedCount === 1 ? "y" : "ies"}` : ""} into <strong>${escapeHtml(folder.name)}</strong>?</p><p>Existing Foundry folders and permissions will be preserved.</p>`
-        });
-        if (!confirmed) return;
-        for (const page of pages) await this.pull(page.id, notionPageTitle(page), { folder, confirmRefresh: false, quiet: true, skipRender: true });
-        ui.notifications.info(`Synchronized ${pages.length} entries from “${folder.name}”.`);
-        await this.showDataSource(database, source);
-      });
-      results.append(pullAll);
+      pullAll.innerHTML = `<i class="fa-solid fa-download"></i> Pull all ${pages.length}`;
+      actions.append(pullAll);
+
+      const showSelected = document.createElement("button");
+      showSelected.type = "button";
+      showSelected.disabled = true;
+      showSelected.innerHTML = '<i class="fa-solid fa-eye"></i> Show selected';
+      actions.append(showSelected);
+
+      const hideSelected = document.createElement("button");
+      hideSelected.type = "button";
+      hideSelected.disabled = true;
+      hideSelected.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide selected';
+      actions.append(hideSelected);
+      results.append(actions);
+
       const rows = pages.map(page => {
         const row = this.resultElement(page, { folder });
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "notion-sync-entry-select";
+        checkbox.setAttribute("aria-label", `Select ${notionPageTitle(page)}`);
+        checkbox.addEventListener("change", updateSelectionControls);
+        row.prepend(checkbox);
         row.dataset.searchText = pageSearchText(page);
         results.append(row);
-        return row;
+        return { page, row, checkbox };
       });
+
+      const visibleRows = () => rows.filter(item => !item.row.hidden);
+      const selectedVisible = () => visibleRows().filter(item => item.checkbox.checked);
+      const updateSelectionControls = () => {
+        const visible = visibleRows();
+        const selected = selectedVisible();
+        pullSelected.disabled = selected.length === 0;
+        pullSelected.innerHTML = `<i class="fa-solid fa-download"></i> Pull selected (${selected.length})`;
+        showSelected.disabled = selected.length === 0;
+        hideSelected.disabled = selected.length === 0;
+        selectVisible.checked = visible.length > 0 && visible.every(item => item.checkbox.checked);
+        selectVisible.indeterminate = visible.some(item => item.checkbox.checked) && !selectVisible.checked;
+      };
+
+      const sortRows = () => {
+        const mode = sortSelect.value;
+        rows.sort((a, b) => compareDatabasePages(a.page, b.page, mode));
+        for (const item of rows) results.append(item.row);
+      };
+
       const updateFilter = () => {
         const query = normalizeSearchText(databaseSearch.value.trim());
-        let visibleCount = 0;
-        for (const row of rows) {
-          row.hidden = Boolean(query) && !row.dataset.searchText.includes(query);
-          if (!row.hidden) visibleCount++;
-        }
+        for (const item of rows) item.row.hidden = Boolean(query) && !item.row.dataset.searchText.includes(query);
         status.textContent = query
-          ? `${visibleCount} of ${pages.length} database entries match “${databaseSearch.value.trim()}”.`
-          : `${pages.length} database entr${pages.length === 1 ? "y" : "ies"} found, sorted alphabetically. Pull individual entries or import the full database.`;
+          ? `${visibleRows().length} of ${pages.length} database entries match “${databaseSearch.value.trim()}”.`
+          : `${pages.length} database entr${pages.length === 1 ? "y" : "ies"} found. Search, sort, select, or pull entries.`;
+        updateSelectionControls();
       };
+
+      const synchronize = async targetRows => {
+        const report = { added: 0, refreshed: 0, skipped: 0, failed: [] };
+        pullSelected.disabled = pullAll.disabled = showSelected.disabled = hideSelected.disabled = true;
+        for (const page of targetRows) {
+          const imported = findImportedEntry(page.id);
+          const lastEdited = page.last_edited_time ?? null;
+          if (imported && lastEdited && imported.getFlag(MODULE_ID, "notionLastEditedTime") === lastEdited) {
+            report.skipped++;
+            continue;
+          }
+          const entry = await this.pull(page.id, notionPageTitle(page), { folder, confirmRefresh: false, quiet: true, skipRender: true });
+          if (!entry) report.failed.push(page);
+          else if (imported) report.refreshed++;
+          else report.added++;
+        }
+        await this.showDataSource(database, source, { syncReport: report });
+      };
+
+      selectVisible.addEventListener("change", () => {
+        for (const item of visibleRows()) item.checkbox.checked = selectVisible.checked;
+        updateSelectionControls();
+      });
       databaseSearch.addEventListener("input", updateFilter);
+      sortSelect.addEventListener("change", sortRows);
+      pullSelected.addEventListener("click", async () => {
+        const selected = selectedVisible().map(item => item.page);
+        if (!selected.length) return;
+        const existing = selected.filter(page => findImportedEntry(page.id)).length;
+        const confirmed = await Dialog.confirm({
+          title: "Pull selected database entries",
+          content: `<p>Sync ${selected.length} selected entries from <strong>${escapeHtml(databaseTitle(database))}</strong>?</p><p>${selected.length - existing} new; ${existing} already imported. Existing Foundry folders and permissions are preserved.</p>`
+        });
+        if (confirmed) await synchronize(selected);
+      });
+      pullAll.addEventListener("click", async () => {
+        const existing = pages.filter(page => findImportedEntry(page.id)).length;
+        const confirmed = await Dialog.confirm({
+          title: "Pull all database entries",
+          content: `<p>Sync all ${pages.length} entries from <strong>${escapeHtml(databaseTitle(database))}</strong>?</p><p>${pages.length - existing} new; ${existing} already imported. Existing Foundry folders and permissions are preserved.</p>`
+        });
+        if (confirmed) await synchronize(pages);
+      });
+
+      const changeSelectedVisibility = async visible => {
+        const selected = selectedVisible();
+        if (!selected.length) return;
+        let changed = 0;
+        let skipped = 0;
+        for (const item of selected) {
+          const entry = findImportedEntry(item.page.id);
+          if (!entry) {
+            skipped++;
+            continue;
+          }
+          try {
+            await entry.update({ ownership: { default: visible ? CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
+            changed++;
+          } catch (error) {
+            ui.notifications.error(`Could not change visibility for “${entry.name}”: ${error.message}`);
+            skipped++;
+          }
+        }
+        ui.notifications.info(`${visible ? "Shown to" : "Hidden from"} players: ${changed} entr${changed === 1 ? "y" : "ies"}${skipped ? `; ${skipped} skipped` : ""}.`);
+        await this.showDataSource(database, source);
+      };
+      showSelected.addEventListener("click", () => changeSelectedVisibility(true));
+      hideSelected.addEventListener("click", () => changeSelectedVisibility(false));
+
+      if (syncReport?.failed?.length) {
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.innerHTML = `<i class="fa-solid fa-rotate"></i> Retry ${syncReport.failed.length} failed`;
+        retry.addEventListener("click", () => synchronize(syncReport.failed));
+        results.insertBefore(retry, controls);
+      }
       updateFilter();
     } catch (error) {
       status.textContent = `Could not load database entries: ${error.message}`;
@@ -347,18 +508,30 @@ class NotionSyncBrowser extends Application {
           type: "text",
           text: { content: html, format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML }
         }],
-        flags: { [MODULE_ID]: { notionPageId: page.id, notionUrl: page.url, syncedAt: new Date().toISOString() } }
+        flags: {
+          [MODULE_ID]: {
+            notionPageId: page.id,
+            notionUrl: page.url,
+            syncedAt: new Date().toISOString(),
+            notionLastEditedTime: page.last_edited_time ?? null
+          }
+        }
       };
       let entry;
       if (imported) {
+        const contentPage = imported.pages.find(journalPage => journalPage.name === "Content");
         if (confirmRefresh) {
+          const previousText = previewText(contentPage?.text?.content ?? "");
+          const nextText = previewText(html);
+          const previousSync = imported.getFlag(MODULE_ID, "syncedAt");
+          const lastSynced = previousSync ? new Date(previousSync).toLocaleString() : "Not recorded";
+          const truncate = value => value.length > 1200 ? `${value.slice(0, 1200)}…` : value;
           const confirmed = await Dialog.confirm({
             title: "Refresh from Notion",
-            content: `<p>Replace the imported title and body for <strong>${escapeHtml(imported.name)}</strong> with the current Notion content?</p><p>Foundry folder and permissions will be preserved.</p>`
+            content: `<p>Last synced: <strong>${escapeHtml(lastSynced)}</strong>. Review the current and incoming text before refreshing. Folder and permissions will be preserved.</p><div class="notion-sync-refresh-preview"><section><strong>In Foundry: ${escapeHtml(imported.name)}</strong><pre>${escapeHtml(truncate(previousText) || "(Empty)")}</pre></section><section><strong>From Notion: ${escapeHtml(data.name)}</strong><pre>${escapeHtml(truncate(nextText) || "(Empty)")}</pre></section></div>`
           });
           if (!confirmed) return null;
         }
-        const contentPage = imported.pages.find(journalPage => journalPage.name === "Content");
         if (contentPage) {
           await contentPage.update({
             "text.content": html,
@@ -374,7 +547,8 @@ class NotionSyncBrowser extends Application {
         await imported.update({
           name: data.name,
           [`flags.${MODULE_ID}.notionUrl`]: page.url,
-          [`flags.${MODULE_ID}.syncedAt`]: data.flags[MODULE_ID].syncedAt
+          [`flags.${MODULE_ID}.syncedAt`]: data.flags[MODULE_ID].syncedAt,
+          [`flags.${MODULE_ID}.notionLastEditedTime`]: data.flags[MODULE_ID].notionLastEditedTime
         });
         entry = imported;
       } else {
@@ -387,7 +561,7 @@ class NotionSyncBrowser extends Application {
       if (!skipRender) this.render(true);
       return entry;
     } catch (error) {
-      ui.notifications.error(`Notion import failed: ${error.message}`);
+      if (!quiet) ui.notifications.error(`Notion import failed: ${error.message}`);
       return null;
     }
   }
@@ -655,6 +829,40 @@ function databaseTitle(database) {
   return richTextTitle(database.title) || database.name || "Notion database";
 }
 
+function compareDatabasePages(a, b, mode) {
+  let left;
+  let right;
+  let descending = false;
+  if (mode === "last_edited_time" || mode === "created_time") {
+    left = a[mode] ?? "";
+    right = b[mode] ?? "";
+    descending = true;
+  } else if (mode.startsWith("property:")) {
+    const name = mode.slice("property:".length);
+    left = propertySortValue(a.properties?.[name]);
+    right = propertySortValue(b.properties?.[name]);
+  } else {
+    left = notionPageTitle(a);
+    right = notionPageTitle(b);
+  }
+  if (typeof left === "number" && typeof right === "number") return descending ? right - left : left - right;
+  const compared = String(left ?? "").localeCompare(String(right ?? ""), undefined, { numeric: true, sensitivity: "base" });
+  return descending ? -compared : compared;
+}
+
+function propertySortValue(property) {
+  if (!property) return "";
+  const value = property[property.type];
+  if (property.type === "number") return value ?? Number.NEGATIVE_INFINITY;
+  if (property.type === "checkbox") return value ? 1 : 0;
+  if (property.type === "date") return value?.start ?? "";
+  if (property.type === "select" || property.type === "status") return value?.name ?? "";
+  if ((property.type === "formula" || property.type === "rollup") && value?.type) {
+    return propertySortValue({ type: value.type, [value.type]: value[value.type] });
+  }
+  return searchableValue(value);
+}
+
 function pageSearchText(page) {
   const values = [notionPageTitle(page)];
   for (const [name, property] of Object.entries(page.properties ?? {})) {
@@ -677,6 +885,16 @@ function searchableValue(value) {
 
 function normalizeSearchText(value) {
   return String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+}
+
+function previewText(html) {
+  return new DOMParser().parseFromString(String(html ?? ""), "text/html").body.textContent?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function formatSyncTime(value) {
+  if (!value) return "time unknown";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "time unknown" : date.toLocaleString();
 }
 
 function richTextTitle(value) {
