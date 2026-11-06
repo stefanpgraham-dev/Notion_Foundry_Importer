@@ -380,7 +380,6 @@ class NotionSyncBrowser extends Application {
         checkbox.type = "checkbox";
         checkbox.className = "notion-sync-entry-select";
         checkbox.setAttribute("aria-label", `Select ${notionPageTitle(page)}`);
-        checkbox.addEventListener("change", updateSelectionControls);
         row.prepend(checkbox);
         row.dataset.searchText = pageSearchText(page);
         results.append(row);
@@ -399,6 +398,7 @@ class NotionSyncBrowser extends Application {
         selectVisible.checked = visible.length > 0 && visible.every(item => item.checkbox.checked);
         selectVisible.indeterminate = visible.some(item => item.checkbox.checked) && !selectVisible.checked;
       };
+      for (const item of rows) item.checkbox.addEventListener("change", updateSelectionControls);
 
       const sortRows = () => {
         const mode = sortSelect.value;
