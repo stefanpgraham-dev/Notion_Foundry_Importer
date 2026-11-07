@@ -90,7 +90,7 @@ class NotionSyncBrowser extends Application {
   async configure() {
     const current = game.settings.get(MODULE_ID, "integrationToken");
     const content = `<div class="notion-sync-config">
-      <p>Create a Notion internal integration with read-content capability, then share the pages you want it to read with that integration.</p>
+      <p>Create a Notion internal integration with read-content and update-content capabilities, then share the pages you want it to access. Update-content is used only to synchronize the Known tag in the Tags multi-select property.</p>
       <label>Integration token <input type="password" name="token" autocomplete="off" value="${escapeAttribute(current)}"></label>
       <p class="hint">The token is stored only in this GM client's Foundry settings. Treat it like a password.</p>
     </div>`;
