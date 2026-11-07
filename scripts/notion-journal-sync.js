@@ -231,7 +231,16 @@ class NotionSyncBrowser extends Application {
         await currentEntry.update({ ownership: { default: show ? CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
         currentEntry = game.journal.get(currentEntry.id);
         updateVisibilityButton();
-        ui.notifications.info(show ? "Journal entry is now visible to players." : "Journal entry is now hidden from players.");
+        if (show) {
+          try {
+            await setNotionPageKnown(page.id, true);
+            ui.notifications.info("Journal entry is visible to players and the Notion page is tagged Known.");
+          } catch (error) {
+            ui.notifications.warn(`Journal entry is visible to players, but Notion could not be tagged Known: ${error.message}`);
+          }
+        } else {
+          ui.notifications.info("Journal entry is now hidden from players.");
+        }
       } catch (error) {
         ui.notifications.error(`Could not change journal visibility: ${error.message}`);
       }
@@ -372,6 +381,12 @@ class NotionSyncBrowser extends Application {
       hideSelected.disabled = true;
       hideSelected.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide selected';
       actions.append(hideSelected);
+
+      const syncVisibility = document.createElement("button");
+      syncVisibility.type = "button";
+      syncVisibility.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Sync visibility';
+      syncVisibility.title = "Set each imported page’s Notion Known tag to match its Foundry player visibility.";
+      actions.append(syncVisibility);
       results.append(actions);
 
       const rows = pages.map(page => {
@@ -471,6 +486,13 @@ class NotionSyncBrowser extends Application {
           }
           try {
             await entry.update({ ownership: { default: visible ? CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE } });
+            if (visible) {
+              try {
+                await setNotionPageKnown(item.page.id, true);
+              } catch (error) {
+                ui.notifications.warn(`“${entry.name}” is visible in Foundry, but Notion could not be tagged Known: ${error.message}`);
+              }
+            }
             changed++;
           } catch (error) {
             ui.notifications.error(`Could not change visibility for “${entry.name}”: ${error.message}`);
@@ -482,6 +504,34 @@ class NotionSyncBrowser extends Application {
       };
       showSelected.addEventListener("click", () => changeSelectedVisibility(true));
       hideSelected.addEventListener("click", () => changeSelectedVisibility(false));
+      syncVisibility.addEventListener("click", async () => {
+        const importedPages = pages.filter(page => findImportedEntry(page.id));
+        if (!importedPages.length) {
+          ui.notifications.info("There are no imported entries in this database to sync.");
+          return;
+        }
+        const confirmed = await Dialog.confirm({
+          title: "Sync Foundry visibility to Notion",
+          content: `<p>Sync player visibility for ${importedPages.length} imported entries in <strong>${escapeHtml(databaseTitle(database))}</strong>?</p><p>Visible entries will be tagged Known; hidden entries will have Known removed. Other Notion tags are preserved.</p>`
+        });
+        if (!confirmed) return;
+        syncVisibility.disabled = true;
+        let synced = 0;
+        let failed = 0;
+        for (const page of importedPages) {
+          const entry = findImportedEntry(page.id);
+          const visible = (entry?.ownership?.default ?? CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
+          try {
+            await setNotionPageKnown(page.id, visible);
+            synced++;
+          } catch (error) {
+            failed++;
+            ui.notifications.warn(`Could not sync “${notionPageTitle(page)}”: ${error.message}`);
+          }
+        }
+        ui.notifications.info(`Visibility sync complete: ${synced} synced${failed ? `, ${failed} failed` : ""}.`);
+        await this.showDataSource(database, source);
+      });
 
       if (syncReport?.failed?.length) {
         const retry = document.createElement("button");
@@ -548,12 +598,16 @@ class NotionSyncBrowser extends Application {
           name: data.name,
           [`flags.${MODULE_ID}.notionUrl`]: page.url,
           [`flags.${MODULE_ID}.syncedAt`]: data.flags[MODULE_ID].syncedAt,
-          [`flags.${MODULE_ID}.notionLastEditedTime`]: data.flags[MODULE_ID].notionLastEditedTime
+          [`flags.${MODULE_ID}.notionLastEditedTime`]: data.flags[MODULE_ID].notionLastEditedTime,
+          ...(hasKnownTag(page) ? { ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER } } : {})
         });
         entry = imported;
       } else {
         data.folder = folder?.id ?? null;
-        data.ownership = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE, [game.user.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER };
+        data.ownership = {
+          default: hasKnownTag(page) ? CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER : CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE,
+          [game.user.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+        };
         entry = await JournalEntry.create(data);
       }
       if (includeChildren) await this.importChildPages(page.id, entry, { skipRender });
@@ -583,6 +637,38 @@ class NotionSyncBrowser extends Application {
     if (!entry || !pageId) return ui.notifications.warn("This entry is not linked to a Notion page.");
     return this.pull(pageId, entry.name, { skipRender });
   }
+}
+
+function hasKnownTag(page) {
+  const tagsProperty = Object.entries(page?.properties ?? {}).find(([name]) => name.trim().toLocaleLowerCase() === "tags")?.[1];
+  return tagsProperty?.type === "multi_select"
+    && tagsProperty.multi_select.some(tag => tag.name.trim().toLocaleLowerCase() === "known");
+}
+
+async function setNotionPageKnown(pageId, known) {
+  const page = await notionRequest(`/pages/${encodeURIComponent(pageId)}`);
+  const [propertyName, tagsProperty] = Object.entries(page.properties ?? {})
+    .find(([name]) => name.trim().toLocaleLowerCase() === "tags") ?? [];
+  if (!tagsProperty) throw new Error('No “Tags” property was found on the Notion page.');
+  if (tagsProperty.type !== "multi_select") throw new Error('The Notion “Tags” property must be a multi-select property.');
+
+  const tags = tagsProperty.multi_select ?? [];
+  const hasKnown = tags.some(tag => tag.name.trim().toLocaleLowerCase() === "known");
+  if (hasKnown === known) return false;
+  const nextTags = known
+    ? [...tags.map(tag => ({ name: tag.name })), { name: "Known" }]
+    : tags.filter(tag => tag.name.trim().toLocaleLowerCase() !== "known").map(tag => ({ name: tag.name }));
+  await notionRequest(`/pages/${encodeURIComponent(pageId)}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        [propertyName]: {
+          multi_select: nextTags
+        }
+      }
+    }
+  });
+  return true;
 }
 
 async function notionRequest(path, { token = game.settings.get(MODULE_ID, "integrationToken"), method = "GET", body } = {}) {
