@@ -18,8 +18,8 @@ A Foundry VTT v14 module for pulling Notion pages into Journal Entries and refre
 - Show or hide an imported entry for players directly from the browser.
 - Import Notion pages tagged `Known` with player Observer access; other pages stay private to the GM by default.
 - Mark a page `Known` in Notion when the GM uses Show in Foundry.
-- Sync Foundry player visibility to or from the Notion `Known` tag for imported database entries.
-- Render common Notion blocks and preserve links to unsupported/external content.
+- Sync Foundry player visibility to the Notion `Known` tag for imported database entries.
+- Render common Notion blocks, including visible image captions, and preserve links to unsupported/external content.
 
 ## Setup
 
@@ -32,9 +32,9 @@ The integration token is stored as a client-scoped Foundry setting and is only u
 
 ## Sync policy
 
-Notion is the source of truth for imported titles and page content. A manual refresh shows a before/after text preview; confirming replaces the imported content and updates its sync time, while leaving Foundry folder placement and permission configuration alone. Batch syncs skip pages whose Notion last-edited time has not changed. The module does not delete journal entries if a Notion page is removed or access is revoked.
+Notion is the source of truth for imported titles and page content. A page-level manual refresh always fetches the page from Notion and shows a before/after text preview; confirming replaces the imported content and updates its sync time while preserving Foundry folder placement and permissions. Database Pull selected/Pull all skips imported pages whose Notion last-edited time has not changed. The module does not delete journal entries if a Notion page is removed or access is revoked.
 
-Foundry journal content remains a one-way import from Notion. Visibility metadata can be synced explicitly: shown entries add `Known`, hidden entries remove `Known`, and all other tags are preserved. The Show action also adds `Known` immediately. Hide changes Foundry visibility; use **Sync visibility** in a database view to reconcile all imported entries in that database. If Notion does not allow an update, Foundry visibility remains changed and the module reports the tagging failure.
+Journal content flows from Notion to Foundry. A new import reads the Notion `Known` tag to set initial player visibility; refreshing an existing entry preserves its current Foundry permissions and does not write visibility back to Notion. **Sync visibility** is a separate Foundry-to-Notion operation: it adds or removes `Known` to match Foundry visibility and does not refresh journal content. **Show** adds `Known` immediately; **Hide** changes Foundry visibility, and **Sync visibility** removes `Known` in Notion. Other Notion tags are preserved. If Notion does not allow an update, Foundry visibility remains changed and the module reports the tagging failure.
 
 ## Notion block support
 
