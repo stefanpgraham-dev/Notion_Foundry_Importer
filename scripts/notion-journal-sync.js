@@ -599,7 +599,7 @@ class NotionSyncBrowser extends Application {
           [`flags.${MODULE_ID}.notionUrl`]: page.url,
           [`flags.${MODULE_ID}.syncedAt`]: data.flags[MODULE_ID].syncedAt,
           [`flags.${MODULE_ID}.notionLastEditedTime`]: data.flags[MODULE_ID].notionLastEditedTime,
-          ...(hasKnownTag(page) ? { ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER } } : {})
+
         });
         entry = imported;
       } else {
@@ -845,7 +845,8 @@ async function formatProperty(property) {
 async function renderImageBlock(block, pageId) {
   const image = block.image ?? {};
   const source = image.external?.url ?? image.file?.url;
-  const alt = image.caption?.map(item => item.plain_text).join("") || "Notion image";
+  const caption = image.caption?.map(item => item.plain_text).join("").trim();
+  const alt = caption || "Notion image";
   if (!source) return `<p><em>[${escapeHtml(alt)} unavailable]</em></p>`;
   try {
     const response = await fetch(source);
@@ -857,7 +858,8 @@ async function renderImageBlock(block, pageId) {
     await ensureDataDirectory(target);
     const uploaded = await foundry.applications.apps.FilePicker.upload("data", target, file, {}, { notify: false });
     const path = uploaded.path ?? uploaded.url ?? uploaded;
-    return `<p><img src="${escapeAttribute(path)}" alt="${escapeAttribute(alt)}" style="max-width:100%"></p>`;
+    const captionMarkup = caption ? `<p class="notion-image-caption">${escapeHtml(caption)}</p>` : "";
+    return `<p><img src="${escapeAttribute(path)}" alt="${escapeAttribute(alt)}" style="max-width:100%"></p>${captionMarkup}`;
   } catch (_error) {
     return `<p><a href="${escapeAttribute(source)}">${escapeHtml(alt)} (open from Notion)</a></p>`;
   }
