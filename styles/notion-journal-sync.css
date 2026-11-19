@@ -142,3 +142,12 @@
 .notion-sync-browser .notion-sync-visibility-button:hover {
   filter: brightness(1.15);
 }
+
+
+.notion-image-caption {
+  margin-top: -0.4rem;
+  color: var(--color-text-dark-secondary, #777);
+  font-size: 0.9em;
+  font-style: italic;
+  text-align: center;
+}
